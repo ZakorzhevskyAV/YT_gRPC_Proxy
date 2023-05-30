@@ -1,0 +1,15 @@
+syntax = "proto3";
+package ytgrpcproxy;
+option go_package = "github.com/ZakorzhevskyAV/YT_gRPC_Proxy/ytgrpcproxy";
+
+service ThumbnailReturn {
+  rpc Get(ThumbnailAddress) returns (ThumbnailData) {}
+}
+
+message ThumbnailAddress {
+  string address = 1;
+}
+
+message ThumbnailData {
+  bytes data = 1;
+}
