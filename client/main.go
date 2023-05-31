@@ -34,9 +34,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error when trying to get YT thumbnail: %s", err)
 	}
-	err = os.WriteFile("test.jpg", response.Data, 0666)
-	if err != nil {
-		log.Fatalf("Failed to write a file: %s", err)
+	var filename string
+	for i := 0; i < 1000; i++ {
+		filename = fmt.Sprintf("image%d.jpg", i)
+		if _, err = os.Stat(filename); err != nil {
+			err = os.WriteFile(filename, response.Data, 0666)
+			if err != nil {
+				log.Fatalf("Failed to write an image into a file: %s", err)
+			}
+			break
+		} else {
+			continue
+		}
 	}
 	fmt.Printf("Response from server acquired")
 
