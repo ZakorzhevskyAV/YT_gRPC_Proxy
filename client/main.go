@@ -19,7 +19,7 @@ func main() {
 
 	flag.Parse()
 
-	link := flag.Arg(1)
+	link := flag.Arg(0)
 
 	var conn *grpc.ClientConn
 	conn, err := grpc.Dial(":8000", grpc.WithInsecure())
@@ -34,7 +34,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error when trying to get YT thumbnail: %s", err)
 	}
-	fmt.Printf(string(response.Data))
+	err = os.WriteFile("test.jpg", response.Data, 0666)
+	if err != nil {
+		log.Fatalf("Failed to write a file: %s", err)
+	}
 	fmt.Printf("Response from server acquired")
 
 }
