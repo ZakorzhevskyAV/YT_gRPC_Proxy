@@ -38,7 +38,7 @@ func DBOpen(dbdirpath string) (db *sql.DB, err error) {
 		return nil, err
 	}
 	if entry, err := os.Stat(dbdirpath + "sqlite.db"); err != nil {
-		_, err := os.Create(dbdirpath + "sqlite.db")
+		err = os.WriteFile(dbdirpath+"sqlite.db", nil, 0666)
 		if err != nil {
 			log.Printf("Failed to create DB file: %s", err)
 			return nil, err

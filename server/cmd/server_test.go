@@ -1,9 +1,8 @@
-package tests
+package main
 
 import (
 	"bytes"
 	"github.com/PuerkitoBio/goquery"
-	"github.com/ZakorzhevskyAV/yt_gRPC_proxy/server/cmd"
 	"io"
 	"net/http"
 	"os"
@@ -15,21 +14,24 @@ func TestDBOpen(t *testing.T) {
 
 	_ = os.RemoveAll(dbdirpath)
 
-	_, err := main.DBOpen(dbdirpath)
+	db, err := DBOpen(dbdirpath)
+	defer db.Close()
 	if err != nil {
 		t.Errorf("Failed to create and open DB file, error: %s", err)
 	}
 	_ = os.RemoveAll(dbdirpath)
 
 	_ = os.MkdirAll(dbdirpath+"sqlite.db", 0666)
-	_, err = main.DBOpen(dbdirpath)
-	if err == nil {
+	db, err = DBOpen(dbdirpath)
+	err = db.Ping()
+	if err != nil {
 		t.Errorf("Supposed DB file name is a directory name yet no error, error")
 	}
 	_ = os.RemoveAll(dbdirpath)
 
-	_, err = os.Create(dbdirpath + "sqlite.db")
-	_, err = main.DBOpen(dbdirpath)
+	err = os.WriteFile(dbdirpath+"sqlite.db", nil, 0666)
+	db, err = DBOpen(dbdirpath)
+	defer db.Close()
 	if err != nil {
 		t.Errorf("Failed to open DB file, error: %s", err)
 	}
@@ -41,7 +43,7 @@ func TestDBInsertSelect(t *testing.T) {
 
 	_ = os.RemoveAll(dbdirpath)
 
-	db, err := main.DBOpen(dbdirpath)
+	db, err := DBOpen(dbdirpath)
 	if err != nil {
 		t.Errorf("Failed to create and open DB file, error: %s", err)
 	}
@@ -53,12 +55,12 @@ func TestDBInsertSelect(t *testing.T) {
 	link = "teststring"
 	data = []byte("aaa")
 
-	err = main.DBInsert(db, link, data)
+	err = DBInsert(db, link, data)
 	if err != nil {
 		t.Errorf("Failed to insert data into DB, error: %s", err)
 	}
 
-	selecteddata, err := main.DBSelect(db, link)
+	selecteddata, err := DBSelect(db, link)
 	if err != nil {
 		t.Errorf("Failed to select data into DB, error: %s", err)
 	}
@@ -89,10 +91,10 @@ func TestDownloadingAndParsing(t *testing.T) {
 		if val == "thumbnailUrl" {
 			ThumbnailLink, attr = selectornew.Attr("href")
 		}
-		if !attr || ThumbnailLink == "" {
-			t.Errorf("Failed to find needed HTML element with needed attribute")
-		}
 	})
+	if !attr || ThumbnailLink == "" {
+		t.Errorf("Failed to find needed HTML element with needed attribute")
+	}
 
 	imgresponse, err := http.Get(ThumbnailLink)
 	if err != nil {

@@ -1,9 +1,8 @@
-package tests
+package main
 
 import (
 	"bytes"
 	"fmt"
-	"github.com/ZakorzhevskyAV/yt_gRPC_proxy/client"
 	"github.com/ZakorzhevskyAV/yt_gRPC_proxy/ytgrpcproxy"
 	"google.golang.org/grpc"
 	"os"
@@ -13,11 +12,11 @@ import (
 func TestWriteImageToFile(t *testing.T) {
 	var err error
 
-	filename := fmt.Sprintf("test.jpg")
+	filename := fmt.Sprintf("image0.jpg")
 
-	_ = os.Remove(filename)
+	_ = os.RemoveAll(filename)
 
-	main.WriteImageToFile([]byte("aaa"), err)
+	WriteImageToFile([]byte("aaa"), err)
 	if _, err = os.Stat(filename); err != nil {
 		t.Errorf("File %s weren't created, error: %s", filename, err)
 	} else {
@@ -29,7 +28,7 @@ func TestWriteImageToFile(t *testing.T) {
 		}
 	}
 
-	_ = os.Remove(filename)
+	_ = os.RemoveAll(filename)
 }
 
 // Требует запущенного gRPC сервера для выполнения
@@ -46,11 +45,11 @@ func TestSendRequest(t *testing.T) {
 	c := ytgrpcproxy.NewThumbnailReturnClient(conn)
 	link = "https://www.youtube.com/watch?v=Gk-z2ykXfJo"
 
-	main.SendRequest(c, link)
+	filename := "image0.jpg"
 
-	filename := "image1.jpg"
+	_ = os.RemoveAll(filename)
 
-	_ = os.Remove(filename)
+	SendRequest(c, link)
 
 	if _, err = os.Stat(filename); err != nil {
 		t.Errorf("File %s weren't created, error: %s", filename, err)
@@ -62,5 +61,5 @@ func TestSendRequest(t *testing.T) {
 		}
 	}
 
-	_ = os.Remove(filename)
+	_ = os.RemoveAll(filename)
 }
