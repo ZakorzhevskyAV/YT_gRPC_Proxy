@@ -197,11 +197,6 @@ func (s ThumbnailServer) Get(ctx context.Context, address *ytgrpcproxy.Thumbnail
 	}
 	log.Printf("Inserted a row into DB file")
 
-	err = os.WriteFile("image.jpg", img, 0666)
-	if err != nil {
-		log.Printf("Failed to write an image into a file: %s", err)
-	}
-
 	return SuccessOutput(img, nil)
 }
 
