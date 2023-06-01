@@ -31,13 +31,13 @@ func SuccessOutput(data []byte, err error) (*ytgrpcproxy.ThumbnailData, error) {
 }
 
 func DBOpen() (db *sql.DB, err error) {
-	err = os.MkdirAll("../../db", 0666)
+	err = os.MkdirAll("./db", 0666)
 	if err != nil {
 		log.Printf("Failed to create DB directory: %s", err)
 		return nil, err
 	}
-	if entry, err := os.Stat("../../db/sqlite.db"); err != nil {
-		_, err := os.Create("../../db/sqlite.db")
+	if entry, err := os.Stat("./db/sqlite.db"); err != nil {
+		_, err := os.Create("./db/sqlite.db")
 		if err != nil {
 			log.Printf("Failed to create DB file: %s", err)
 			return nil, err
@@ -46,7 +46,9 @@ func DBOpen() (db *sql.DB, err error) {
 		log.Printf("DB file is already assigned to a directory")
 		return nil, err
 	}
-	db, err = sql.Open("sqlite3", "../../db/sqlite.db")
+
+	db, _ = sql.Open("sqlite3", "./db/sqlite.db")
+	err = db.Ping()
 	if err != nil {
 		log.Printf("Failed to open DB file: %s", err)
 		return nil, err
@@ -86,7 +88,7 @@ func DBSelect(db *sql.DB, link string) (img []byte, err error) {
 	}
 	defer rows.Close()
 	for rows.Next() {
-		err = rows.Scan(&link, &img)
+		err = rows.Scan(&img)
 		if err != nil {
 			log.Printf("Failed to scan rows from a select statement for DB query: %s", err)
 			return nil, err
@@ -108,33 +110,43 @@ func (s ThumbnailServer) Get(ctx context.Context, address *ytgrpcproxy.Thumbnail
 	var db *sql.DB
 	var err error
 
-	db, err = sql.Open("sqlite3", "../../db/sqlite.db")
+	log.Printf("Opening DB to get thumbnail")
+	db, _ = sql.Open("sqlite3", "./db/sqlite.db")
+	err = db.Ping()
 	if err == nil {
 		img, err = DBSelect(db, address.Address)
 		if err != nil {
 			log.Printf("Failed to get an image from DB: %s", err)
+		} else if len(img) == 0 {
+			log.Printf("No requested image in DB")
 		} else {
 			return SuccessOutput(img, nil)
 		}
 	} else {
-		log.Printf("Failed to open DB file, trying to get the image from: %s", err)
+		log.Printf("Failed to open DB file, trying to get the image from the web: %s", err)
 	}
 	defer db.Close()
+	log.Printf("No DB file")
 
+	log.Printf("Getting YT video page")
 	response, err := http.Get(address.Address)
 	if err != nil {
 		log.Printf("Failed to get a response: %s", err)
 		return ErrOutput("Failed to get a response", err)
 	}
+	log.Printf("Got YT video page")
 
+	log.Printf("Preparing to parse YT video page")
 	doc, err := goquery.NewDocumentFromReader(response.Body)
 	if err != nil {
 		log.Printf("Failed to parse HTML body: %s", err)
 		return ErrOutput("Failed to parse HTML body", err)
 	}
+	log.Printf("Prepared to parse YT video page")
 
 	defer response.Body.Close()
 
+	log.Printf("Parsing YT video page")
 	selector := doc.Find("link")
 	var ThumbnailLink string
 	selector.Each(func(i int, selectornew *goquery.Selection) {
@@ -143,23 +155,30 @@ func (s ThumbnailServer) Get(ctx context.Context, address *ytgrpcproxy.Thumbnail
 			ThumbnailLink, _ = selectornew.Attr("href")
 		}
 	})
+	log.Printf("Parsed YT video page")
 
+	log.Printf("Getting thumbnail")
 	imgresponse, err := http.Get(ThumbnailLink)
 	if err != nil {
 		log.Printf("Failed to get a response: %s", err)
 		return ErrOutput("Failed to get a response", err)
 	}
+	log.Printf("Got thumbnail")
 
+	log.Printf("Converting thumbnail to bytes")
 	img, err = io.ReadAll(imgresponse.Body)
 	if err != nil {
 		log.Printf("Failed to read response body to get the image: %s", err)
 		return ErrOutput("Failed to read response body to get the image", err)
 	}
-
 	defer imgresponse.Body.Close()
+	log.Printf("Converted thumbnail to bytes")
 
-	db, err = sql.Open("sqlite3", "../../db/sqlite.db")
+	log.Printf("Opening DB file")
+	db, _ = sql.Open("sqlite3", "./db/sqlite.db")
+	err = db.Ping()
 	if err != nil {
+		log.Printf("Failed to open DB file, using DBOpen function: %s", err)
 		db, err = DBOpen()
 		if err != nil {
 			log.Printf("Failed to open DB file: %s", err)
@@ -167,12 +186,15 @@ func (s ThumbnailServer) Get(ctx context.Context, address *ytgrpcproxy.Thumbnail
 		}
 	}
 	defer db.Close()
+	log.Printf("Opened DB file")
 
+	log.Printf("Inserting a row into DB file")
 	err = DBInsert(db, address.Address, img)
 	if err != nil {
 		log.Printf("Failed to insert data into DB: %s", err)
 		return SuccessOutput(img, nil)
 	}
+	log.Printf("Inserted a row into DB file")
 
 	err = os.WriteFile("image.jpg", img, 0666)
 	if err != nil {
