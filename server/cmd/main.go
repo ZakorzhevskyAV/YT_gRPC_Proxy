@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/ZakorzhevskyAV/yt_gRPC_proxy/ytgrpcproxy"
 	_ "github.com/mattn/go-sqlite3"
@@ -30,14 +31,14 @@ func SuccessOutput(data []byte, err error) (*ytgrpcproxy.ThumbnailData, error) {
 	}, err
 }
 
-func DBOpen() (db *sql.DB, err error) {
-	err = os.MkdirAll("./db", 0666)
+func DBOpen(dbdirpath string) (db *sql.DB, err error) {
+	err = os.MkdirAll(dbdirpath, 0666)
 	if err != nil {
 		log.Printf("Failed to create DB directory: %s", err)
 		return nil, err
 	}
-	if entry, err := os.Stat("./db/sqlite.db"); err != nil {
-		_, err := os.Create("./db/sqlite.db")
+	if entry, err := os.Stat(dbdirpath + "sqlite.db"); err != nil {
+		_, err := os.Create(dbdirpath + "sqlite.db")
 		if err != nil {
 			log.Printf("Failed to create DB file: %s", err)
 			return nil, err
@@ -47,7 +48,7 @@ func DBOpen() (db *sql.DB, err error) {
 		return nil, err
 	}
 
-	db, _ = sql.Open("sqlite3", "./db/sqlite.db")
+	db, _ = sql.Open("sqlite3", dbdirpath+"sqlite.db")
 	err = db.Ping()
 	if err != nil {
 		log.Printf("Failed to open DB file: %s", err)
@@ -108,11 +109,12 @@ func (s ThumbnailServer) Get(ctx context.Context, address *ytgrpcproxy.Thumbnail
 
 	var img []byte
 	var db *sql.DB
+	var dbdirpath string
 	var err error
 
 	log.Printf("Opening DB to get thumbnail")
-	db, _ = sql.Open("sqlite3", "./db/sqlite.db")
-	err = db.Ping()
+	dbdirpath = "./db/"
+	db, err = DBOpen(dbdirpath)
 	if err == nil {
 		img, err = DBSelect(db, address.Address)
 		if err != nil {
@@ -139,22 +141,26 @@ func (s ThumbnailServer) Get(ctx context.Context, address *ytgrpcproxy.Thumbnail
 	log.Printf("Preparing to parse YT video page")
 	doc, err := goquery.NewDocumentFromReader(response.Body)
 	if err != nil {
-		log.Printf("Failed to parse HTML body: %s", err)
+		log.Printf("Failed to prepare HTML body for oarsing: %s", err)
 		return ErrOutput("Failed to parse HTML body", err)
 	}
 	log.Printf("Prepared to parse YT video page")
-
 	defer response.Body.Close()
 
 	log.Printf("Parsing YT video page")
 	selector := doc.Find("link")
 	var ThumbnailLink string
+	var attr bool
 	selector.Each(func(i int, selectornew *goquery.Selection) {
 		val, _ := selectornew.Attr("itemprop")
 		if val == "thumbnailUrl" {
-			ThumbnailLink, _ = selectornew.Attr("href")
+			ThumbnailLink, attr = selectornew.Attr("href")
 		}
 	})
+	if !attr || ThumbnailLink == "" {
+		log.Printf("Failed to find needed HTML element with needed attribute")
+		return ErrOutput("Failed to find needed HTML element with needed attribute", fmt.Errorf("Failed to find needed HTML element with needed attribute"))
+	}
 	log.Printf("Parsed YT video page")
 
 	log.Printf("Getting thumbnail")
@@ -175,15 +181,10 @@ func (s ThumbnailServer) Get(ctx context.Context, address *ytgrpcproxy.Thumbnail
 	log.Printf("Converted thumbnail to bytes")
 
 	log.Printf("Opening DB file")
-	db, _ = sql.Open("sqlite3", "./db/sqlite.db")
-	err = db.Ping()
+	db, err = DBOpen(dbdirpath)
 	if err != nil {
-		log.Printf("Failed to open DB file, using DBOpen function: %s", err)
-		db, err = DBOpen()
-		if err != nil {
-			log.Printf("Failed to open DB file: %s", err)
-			return SuccessOutput(img, nil)
-		}
+		log.Printf("Failed to open DB file: %s", err)
+		return SuccessOutput(img, nil)
 	}
 	defer db.Close()
 	log.Printf("Opened DB file")
